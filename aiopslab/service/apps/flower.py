@@ -65,5 +65,5 @@ class Flower(Application):
 if __name__ == "__main__":
     flower = Flower()
     flower.deploy()
-    flower.delete()
-    flower.cleanup()
+    # flower.delete()
+    # flower.cleanup()

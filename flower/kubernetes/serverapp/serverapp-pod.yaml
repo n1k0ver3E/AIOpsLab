@@ -8,6 +8,8 @@ metadata:
     io.kompose.service: serverapp
   name: serverapp
 spec:
+  securityContext:
+    runAsUser: 0
   containers:
     - args:
         - --insecure

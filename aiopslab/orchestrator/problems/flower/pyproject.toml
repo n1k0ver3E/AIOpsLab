@@ -36,5 +36,5 @@ default = "local-simulation"
 options.num-supernodes = 10
 
 [tool.flwr.federations.local-deployment]
-address = "127.0.0.1:9093"
+address = "10.244.1.13:9093"
 insecure = true
