@@ -3,6 +3,7 @@
 - Python >= 3.11
 - [Docker](https://docs.docker.com/get-started/get-docker/)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- [Helm](https://helm.sh/)
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/)
 - [Poetry](https://python-poetry.org/docs/)
 - [k9s](https://k9scli.io/) - Not necessary but recommended for monitoring the cluster
