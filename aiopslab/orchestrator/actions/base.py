@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from aiopslab.utils.actions import action, read, write
 from aiopslab.service.kubectl import KubeCtl
+from aiopslab.service.dock import Docker
 from aiopslab.service.shell import Shell
 
 # from aiopslab.observer import initialize_pod_and_service_lists
@@ -22,7 +23,7 @@ class TaskActions:
     @read
     def get_logs(namespace: str, service: str) -> str:
         """
-        Collects relevant log data from a pod using Kubectl.
+        Collects relevant log data from a pod using Kubectl or from a container with Docker.
 
         Args:
             namespace (str): The namespace in which the service is running.
@@ -31,20 +32,29 @@ class TaskActions:
         Returns:
             str | dict | list[dicts]: Log data as a structured object or a string.
         """
-        kubectl = KubeCtl()
-        try:
-            if namespace == "test-social-network":
-                user_service_pod = kubectl.get_pod_name(namespace, f"app={service}")
-            elif namespace == "test-hotel-reservation":
-                user_service_pod = kubectl.get_pod_name(
-                    namespace, f"io.kompose.service={service}"
-                )
-            else:
-                raise Exception
-            logs = kubectl.get_pod_logs(user_service_pod, namespace)
-        except Exception as e:
-            return "Error: Your service/namespace does not exist. Use kubectl to check."
+        if namespace == "docker":
+            docker = Docker()
+            try:
+                logs = docker.get_logs(service)
+            except Exception as e:
+                return "Error: Your service does not exist. Use docker to check."
+        
+        else:
+            kubectl = KubeCtl()
+            try:
+                if namespace == "test-social-network":
+                    user_service_pod = kubectl.get_pod_name(namespace, f"app={service}")
+                elif namespace == "test-hotel-reservation":
+                    user_service_pod = kubectl.get_pod_name(
+                        namespace, f"io.kompose.service={service}"
+                    )
+                else:
+                    raise Exception
+                logs = kubectl.get_pod_logs(user_service_pod, namespace)
+            except Exception as e:
+                return "Error: Your service/namespace does not exist. Use kubectl to check."
 
+        print(logs)
         logs = "\n".join(logs.split("\n"))
 
         return logs

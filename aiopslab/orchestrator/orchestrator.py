@@ -44,25 +44,26 @@ class Orchestrator:
         self.session.set_problem(prob, pid=problem_id)
         self.session.set_agent(self.agent_name)
 
-        print("Setting up OpenEBS...")
+        if "flower" not in problem_id: # temporary fix for testing, will edit later
+            print("Setting up OpenEBS...")
 
-        command = "kubectl get pods -n openebs"
-        result = self.kubectl.exec_command(command)
-        if "Running" in result:
-            print("OpenEBS is already running. Skipping installation.")
-        else:
-            self.kubectl.exec_command(
-                "kubectl apply -f https://openebs.github.io/charts/openebs-operator.yaml"
-            )
-            self.kubectl.exec_command(
-                "kubectl patch storageclass openebs-hostpath -p '{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
-            )
-            self.kubectl.wait_for_ready("openebs")
-            print("OpenEBS setup completed.")
+            command = "kubectl get pods -n openebs"
+            result = self.kubectl.exec_command(command)
+            if "Running" in result:
+                print("OpenEBS is already running. Skipping installation.")
+            else:
+                self.kubectl.exec_command(
+                    "kubectl apply -f https://openebs.github.io/charts/openebs-operator.yaml"
+                )
+                self.kubectl.exec_command(
+                    "kubectl patch storageclass openebs-hostpath -p '{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
+                )
+                self.kubectl.wait_for_ready("openebs")
+                print("OpenEBS setup completed.")
 
-        # Setup and deploy Prometheus
-        self.prometheus = Prometheus()
-        self.prometheus.deploy()
+            # Setup and deploy Prometheus
+            self.prometheus = Prometheus()
+            self.prometheus.deploy()
 
         # deploy service
         prob.app.delete()

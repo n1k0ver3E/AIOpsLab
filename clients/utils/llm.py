@@ -5,6 +5,7 @@
 
 import os
 from openai import OpenAI
+from groq import Groq
 from pathlib import Path
 import json
 
@@ -78,6 +79,49 @@ class GPT4Turbo:
 
     def run(self, payload: list[dict[str, str]]) -> list[str]:
         response = self.inference(payload)
+        if self.cache is not None:
+            self.cache.add_to_cache(payload, response)
+            self.cache.save_cache()
+        return response
+
+
+class LLaMA3:
+    """Abstraction for Meta's LLaMA-3 model."""
+
+    def __init__(self):
+        self.cache = Cache()
+
+    def inference(self, payload: list[dict[str, str]]) -> list[str]:
+        if self.cache is not None:
+            cache_result = self.cache.get_from_cache(payload)
+            if cache_result is not None:
+                return cache_result
+
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        try:
+            response = client.chat.completions.create(
+                messages=payload,
+                model="llama-3.1-8b-instant",
+                max_tokens=1024,
+                temperature=0.5,
+                top_p=0.95,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                n=1,
+                timeout=60,
+                stop=[],
+            )
+        except Exception as e:
+            print(f"Exception: {repr(e)}")
+            raise e
+
+        return [c.message.content for c in response.choices]  # type: ignore
+
+    def run(self, payload: list[dict[str, str]]) -> list[str]:
+        response = self.inference(payload)
+        
+        print("Llama response:", response)
+        
         if self.cache is not None:
             self.cache.add_to_cache(payload, response)
             self.cache.save_cache()
