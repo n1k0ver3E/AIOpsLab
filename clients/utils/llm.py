@@ -222,7 +222,7 @@ class vLLMClient:
         return response
 
 
-class LLaMA3:
+class LLaMAClient:
     """Abstraction for Meta's LLaMA-3 model."""
 
     def __init__(self):

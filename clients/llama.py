@@ -9,14 +9,14 @@ sys.path.append("../..")
 import asyncio
 
 from aiopslab.orchestrator import Orchestrator
-from clients.utils.llm import LLaMA3
+from clients.utils.llm import LLaMAClient
 from clients.utils.templates import DOCS
 
 
 class Agent:
     def __init__(self):
         self.history = []
-        self.llm = LLaMA3()
+        self.llm = LLaMAClient()
 
     def init_context(self, problem_desc: str, instructions: str, apis: str):
         """Initialize the context for the agent."""
