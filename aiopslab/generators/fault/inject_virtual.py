@@ -256,6 +256,10 @@ class VirtualizationFaultInjector(FaultInjector):
         for service in microservices:
             self.docker.get_container(service).stop()
             print(f"Stopped container {service}.")
+            
+            print("Waiting for faults to propagate...")
+            time.sleep(15)
+            print("Faults propagated.") 
     
     def recover_container_stop(self, microservices: list[str]):
         for service in microservices:

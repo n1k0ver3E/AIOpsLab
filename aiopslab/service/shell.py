@@ -21,8 +21,6 @@ class Shell:
         """Execute a shell command on localhost, via SSH, or inside kind's control-plane container."""
         k8s_host = config.get("k8s_host", "localhost")  # Default to localhost
         
-        print("Command:", command)
-
         if k8s_host == "kind":
             return Shell.docker_exec("kind-control-plane", command)
 

@@ -81,6 +81,9 @@ class TaskActions:
         """
         if "kubectl edit" in command or "edit svc" in command:
             return "Error: Cannot use `kubectl edit`. Use `kubectl patch` instead."
+        
+        if "docker logs -f" in command:
+            return "Error: Cannot use `docker logs -f`. Use `docker logs` instead."
 
         return Shell.exec(command)
 
