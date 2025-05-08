@@ -28,6 +28,7 @@ from aiopslab.orchestrator.problems.redeploy_without_pv import *
 from aiopslab.orchestrator.problems.wrong_bin_usage import *
 from aiopslab.orchestrator.problems.operator_misoperation import *
 from aiopslab.orchestrator.problems.flower_node_stop import *
+from aiopslab.orchestrator.problems.flower_model_misconfig import *
 
 
 class ProblemRegistry:
@@ -214,6 +215,7 @@ class ProblemRegistry:
             # "operator_wrong_update_strategy-localization-1": K8SOperatorWrongUpdateStrategyLocalization,
             # Flower
             "flower_node_stop-detection": FlowerNodeStopDetection,
+            "flower_model_misconfig-detection": FlowerModelMisconfigDetection,
         }
 
     def get_problem_instance(self, problem_id: str):

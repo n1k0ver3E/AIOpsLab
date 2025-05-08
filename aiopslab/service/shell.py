@@ -58,7 +58,7 @@ class Shell:
                 print(f"[ERROR] Command execution failed: {error_message}")
                 return error_message
             else:
-                output_message = out.stdout.decode("utf-8")
+                output_message = out.stdout.decode("utf-8") + out.stderr.decode("utf-8")
                 print(output_message)
                 return output_message
 

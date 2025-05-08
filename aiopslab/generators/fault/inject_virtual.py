@@ -265,7 +265,20 @@ class VirtualizationFaultInjector(FaultInjector):
         for service in microservices:
             self.docker.get_container(service).start()
             print(f"Started container {service}.")
-
+            
+    def inject_model_misconfig(self, microservices: list[str]):
+        """Inject a fault to misconfigure the model in the Flower application."""
+        for service in microservices:
+            command = f""" docker exec -it {service} sh -c "sed -i '24s/84/80/' /app/.flwr/apps/*/task.py" """
+            self.docker.exec_command(command)
+            print(f"Changed model configuration for service: {service}")
+            
+    def recover_model_misconfig(self, microservices: list[str]):
+        for service in microservices:
+            command = f""" docker exec -it {service} sh -c "sed -i '24s/80/84/' /app/.flwr/apps/*/task.py" """
+            self.docker.exec_command(command)
+            print(f"Recovered model configuration for service: {service}")
+            
     ############# HELPER FUNCTIONS ################
     def _wait_for_pods_ready(self, microservices: list[str], timeout: int = 30):
         for service in microservices:

@@ -64,7 +64,7 @@ if __name__ == "__main__":
     orchestrator = Orchestrator()
     orchestrator.register_agent(agent, name="llama-w-shell")
 
-    pid = "flower_node_stop-detection"
+    pid = "flower_model_misconfig-detection"
     problem_desc, instructs, apis = orchestrator.init_problem(pid)
     agent.init_context(problem_desc, instructs, apis)
     asyncio.run(orchestrator.start_problem(max_steps=10))
