@@ -2,10 +2,6 @@
 Naive LLaMA client (with shell access) for AIOpsLab.
 """
 
-import sys
-sys.path.append("..")
-sys.path.append("../..")
-
 import asyncio
 
 from aiopslab.orchestrator import Orchestrator

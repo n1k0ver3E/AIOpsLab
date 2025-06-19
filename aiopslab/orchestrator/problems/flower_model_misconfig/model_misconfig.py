@@ -27,24 +27,40 @@ class FlowerModelMisconfigBaseTask:
         command = "flwr run train local-deployment"
         self.docker.exec_command(command, cwd=self.train_dir)
         
-        print("Waiting for workload to start...")
-        time.sleep(10)
+        path = "/app/.flwr/apps"
+        check = f""" docker exec -it {self.faulty_service} sh -c "test -d {path} && echo 'exists'" """
         
-        print("Injecting fault again...")
-        self.inject_fault()
+        print("Waiting for workload to start...")
+        while True:
+            exists = self.docker.exec_command(check)
+            if exists.strip() == "exists":
+                break
+            time.sleep(1)
+        print("Workload started successfully.")
+        
+        # Inject fault after workload starts, since the required files are created during the workload
+        print("Injecting fault...")
+        self.inject_fault(inject=True)
         
         print("Waiting for faults to propagate...")
-        time.sleep(60)
+        while True:
+            logs = self.docker.get_logs(self.faulty_service)
+            if "error" in logs.lower():
+                break
+            time.sleep(1)
         print("Faults propagated.")
         
-    def inject_fault(self):
+    def inject_fault(self, inject: bool = False):
         print("== Fault Injection ==")
-        injector = VirtualizationFaultInjector(namespace=self.namespace)
-        injector._inject(
-            fault_type="model_misconfig",
-            microservices=[self.faulty_service],
-        )
-        print(f"Service: {self.faulty_service} | Namespace: {self.namespace}\n")
+        if inject:
+            injector = VirtualizationFaultInjector(namespace=self.namespace)
+            injector._inject(
+                fault_type="model_misconfig",
+                microservices=[self.faulty_service],
+            )
+            print(f"Service: {self.faulty_service} | Namespace: {self.namespace}\n")
+        else:
+            print("Fault injection skipped.")
         
     def recover_fault(self):
         print("== Fault Recovery ==")
