@@ -45,10 +45,11 @@ class Orchestrator:
         self.session = Session()
         print(f"Session ID: {self.session.session_id}")
         prob = self.probs.get_problem_instance(problem_id)
+        deployment = self.probs.get_problem_deployment(problem_id)
         self.session.set_problem(prob, pid=problem_id)
         self.session.set_agent(self.agent_name)
 
-        if "flower" not in problem_id: # temporary fix for testing, will edit later
+        if deployment != "docker":
             print("Setting up OpenEBS...")
 
             # Install OpenEBS

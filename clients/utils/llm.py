@@ -266,9 +266,6 @@ class LLaMAClient:
 
     def run(self, payload: list[dict[str, str]]) -> list[str]:
         response = self.inference(payload)
-        
-        print("Llama response:", response)
-        
         if self.cache is not None:
             self.cache.add_to_cache(payload, response)
             self.cache.save_cache()

@@ -217,6 +217,10 @@ class ProblemRegistry:
             "flower_node_stop-detection": FlowerNodeStopDetection,
             "flower_model_misconfig-detection": FlowerModelMisconfigDetection,
         }
+        self.DOCKER_REGISTRY = [
+            "flower_node_stop-detection",
+            "flower_model_misconfig-detection",
+        ]
 
     def get_problem_instance(self, problem_id: str):
         if problem_id not in self.PROBLEM_REGISTRY:
@@ -236,3 +240,8 @@ class ProblemRegistry:
         if task_type:
             return len([k for k in self.PROBLEM_REGISTRY.keys() if task_type in k])
         return len(self.PROBLEM_REGISTRY)
+    
+    def get_problem_deployment(self, problem_id: str):
+        if problem_id in self.DOCKER_REGISTRY:
+            return "docker"
+        return "k8s"
