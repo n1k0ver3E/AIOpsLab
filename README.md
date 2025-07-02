@@ -369,11 +369,13 @@ See a full example of a problem [here](/aiopslab/orchestrator/problems/k8s_targe
 <h2 id="📄how-to-cite">📄 How to Cite</h2>
 
 ```bibtex
-@misc{chen2024aiopslab,
-  title = {AIOpsLab: A Holistic Framework to Evaluate AI Agents for Enabling Autonomous Clouds},
-  author = {Chen, Yinfang and Shetty, Manish and Somashekar, Gagan and Ma, Minghua and Simmhan, Yogesh and Mace, Jonathan and Bansal, Chetan and Wang, Rujia and Rajmohan, Saravan},
-  year = {2025},
-  url = {https://arxiv.org/abs/2501.06706} 
+@inproceedings{
+chen2025aiopslab,
+title={{AIO}psLab: A Holistic Framework to Evaluate {AI} Agents for Enabling Autonomous Clouds},
+author={Yinfang Chen and Manish Shetty and Gagan Somashekar and Minghua Ma and Yogesh Simmhan and Jonathan Mace and Chetan Bansal and Rujia Wang and Saravan Rajmohan},
+booktitle={Eighth Conference on Machine Learning and Systems},
+year={2025},
+url={https://openreview.net/forum?id=3EXBLwGxtq}
 }
 @inproceedings{shetty2024building,
   title = {Building AI Agents for Autonomous Clouds: Challenges and Design Principles},
