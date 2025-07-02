@@ -57,7 +57,7 @@ Docker is required to run Kubernetes and containers. Install Docker Desktop for 
 For native Ubuntu, install Docker using the following commands, follow the [official Docker installation guide](https://docs.docker.com/engine/install/ubuntu/).
 
 ### **Install kind**
-Install kind (Kubernetes IN Docker) to create a local Kubernetes cluster:
+Install kind (Kubernetes IN Docker) to create a local Kubernetes cluster (for the latest release, [kind releases](https://github.com/kubernetes-sigs/kind/releases)):
 ```bash
 curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
 chmod +x ./kind
