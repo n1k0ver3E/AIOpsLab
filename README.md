@@ -28,6 +28,7 @@ Moreover, AIOpsLab provides a built-in benchmark suite with a set of problems to
 
 ### Requirements
 - Python >= 3.11
+- Additional requirements depend on the deployment option selected, which is explained in the next section
 
 Recommended installation:
 ```bash
@@ -52,7 +53,7 @@ poetry shell
 Choose either a) or b) to set up your cluster and then proceed to the next steps.
 
 ### a) Local simulated cluster
-AIOpsLab can be run on a local simulated cluster using [kind](https://kind.sigs.k8s.io/) on your local machine.
+AIOpsLab can be run on a local simulated cluster using [kind](https://kind.sigs.k8s.io/) on your local machine. Please look at this [README](kind/README.md#prerequisites) for a list of prerequisites.
 
 ```bash
 # For x86 machines
@@ -62,7 +63,7 @@ kind create cluster --config kind/kind-config-x86.yaml
 kind create cluster --config kind/kind-config-arm.yaml
 ```
 
-If you're running into issues, consider building a Docker image for your machine by following this [README](kind/README.md). Please also open an issue.
+If you're running into issues, consider building a Docker image for your machine by following this [README](kind/README.md#deployment-steps). Please also open an issue.
 
 After finishing cluster creation, proceed to the next "Update `config.yml`" step.
 
