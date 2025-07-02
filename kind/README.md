@@ -64,7 +64,7 @@ chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
 ```
 
-For more installation options and documentation, see [kind documentation](https://kind.sigs.k8s.io/docs/user/quick-start/). 
+For more installation options and documentation, see [kind documentation](https://kind.sigs.k8s.io/docs/user/quick-start/).
 ### **Install kubectl**
 Install **kubectl** to interact with Kubernetes clusters:
 ```bash
