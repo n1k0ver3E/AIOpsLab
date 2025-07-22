@@ -11,11 +11,12 @@ from typing import Optional, List, Dict
 from dataclasses import dataclass
 
 from openai import OpenAI, AzureOpenAI
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider, AzureCliCredential
+from azure.identity import get_bearer_token_provider, AzureCliCredential, ManagedIdentityCredential
 
 CACHE_DIR = Path("./cache_dir")
 CACHE_PATH = CACHE_DIR / "cache.json"
 MODEL = "gpt-4o"
+
 
 @dataclass
 class AzureConfig:
@@ -83,10 +84,12 @@ class GPT4Turbo:
                 raise ValueError("Azure configuration file must be provided for access via managed identity.\n Check AIOpsLab/clients/configs/example_azure_config.yml for an example.")
             azure_config = self._load_azure_config(azure_config_file)
             if auth_type == "cli":
-                # force authentication via Azure CLI as DefaultAzureCredential prioritizes managed identity
                 credential = AzureCliCredential()
             elif auth_type == "managed_identity":
-                credential = DefaultAzureCredential()
+                client_id = os.getenv("AZURE_CLIENT_ID")
+                if client_id is None:
+                    raise ValueError("Managed identity selected but AZURE_CLIENT_ID is not set.")
+                credential = ManagedIdentityCredential(client_id=client_id)
             token_provider = get_bearer_token_provider(
                 credential, "https://cognitiveservices.azure.com/.default"
             )
