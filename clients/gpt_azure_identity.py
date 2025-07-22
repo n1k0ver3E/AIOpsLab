@@ -66,9 +66,9 @@ if __name__ == "__main__":
         print(f"\nUsage: python {script_name} <authentication_type> <azure_config_file>")
         print("\nArguments:")
         print("  <authentication_type> : Required. The method to use for authentication.")
-        print("                            Accepted values: 'cli', 'managed-identity', 'default'")
+        print("                            Accepted values: 'cli', 'managed_identity'")
         print("  <azure_config_file>     : Required. Path to the JSON configuration file for Azure OpenAI.")
-        print("\nExamples:",)
+        print("\nExamples:")
         print(f"  python {script_name} cli ./configs/dev_config.json", file=sys.stderr)
         print(f"  python {script_name} managed-identity ./configs/prod_config.json", file=sys.stderr)
         
