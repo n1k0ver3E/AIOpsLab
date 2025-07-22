@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""An common abstraction for a cached LLM inference setup. Currently supports OpenAI's gpt-4-turbo."""
+"""A common abstraction for a cached LLM inference setup. Currently supports OpenAI's gpt-4-turbo."""
 
 import os
 import json
