@@ -99,7 +99,7 @@ class GPT4Turbo:
                 azure_ad_token_provider=token_provider
             )
         else:
-            raise ValueError("auth_type must be either 'key' or 'managed'")
+            raise ValueError("auth_type must be one of 'key', 'cli', or 'managed_identity'")
 
     def inference(self, payload: list[dict[str, str]]) -> list[str]:
         if self.cache is not None:
