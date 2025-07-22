@@ -61,6 +61,7 @@ class Agent:
 
 if __name__ == "__main__":
     #TODO: use argparse for better argument handling
+    script_name = sys.argv[0]
     if len(sys.argv) < 3:
         print(f"Error: Missing required arguments.")
         print(f"\nUsage: python {script_name} <authentication_type> <azure_config_file>")
