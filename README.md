@@ -29,6 +29,7 @@ Moreover, AIOpsLab provides a built-in benchmark suite with a set of problems to
 ### Requirements
 - Python >= 3.11
 - [Helm](https://helm.sh/)
+- Additional requirements depend on the deployment option selected, which is explained in the next section
 
 Recommended installation:
 ```bash
@@ -53,7 +54,7 @@ poetry shell
 Choose either a) or b) to set up your cluster and then proceed to the next steps.
 
 ### a) Local simulated cluster
-AIOpsLab can be run on a local simulated cluster using [kind](https://kind.sigs.k8s.io/) on your local machine.
+AIOpsLab can be run on a local simulated cluster using [kind](https://kind.sigs.k8s.io/) on your local machine. Please look at this [README](kind/README.md#prerequisites) for a list of prerequisites.
 
 ```bash
 # For x86 machines
@@ -63,7 +64,7 @@ kind create cluster --config kind/kind-config-x86.yaml
 kind create cluster --config kind/kind-config-arm.yaml
 ```
 
-If you're running into issues, consider building a Docker image for your machine by following this [README](kind/README.md). Please also open an issue.
+If you're running into issues, consider building a Docker image for your machine by following this [README](kind/README.md#deployment-steps). Please also open an issue.
 
 ### [Tips]
 If you are running AIOpsLab using a proxy, beware of exporting the HTTP proxy as `172.17.0.1`. When creating the kind cluster, all the nodes in the cluster will inherit the proxy setting from the host environment and the Docker container. 
@@ -447,11 +448,13 @@ See a full example of a problem [here](/aiopslab/orchestrator/problems/k8s_targe
 <h2 id="📄how-to-cite">📄 How to Cite</h2>
 
 ```bibtex
-@misc{chen2024aiopslab,
-  title = {AIOpsLab: A Holistic Framework to Evaluate AI Agents for Enabling Autonomous Clouds},
-  author = {Chen, Yinfang and Shetty, Manish and Somashekar, Gagan and Ma, Minghua and Simmhan, Yogesh and Mace, Jonathan and Bansal, Chetan and Wang, Rujia and Rajmohan, Saravan},
-  year = {2025},
-  url = {https://arxiv.org/abs/2501.06706} 
+@inproceedings{
+chen2025aiopslab,
+title={{AIO}psLab: A Holistic Framework to Evaluate {AI} Agents for Enabling Autonomous Clouds},
+author={Yinfang Chen and Manish Shetty and Gagan Somashekar and Minghua Ma and Yogesh Simmhan and Jonathan Mace and Chetan Bansal and Rujia Wang and Saravan Rajmohan},
+booktitle={Eighth Conference on Machine Learning and Systems},
+year={2025},
+url={https://openreview.net/forum?id=3EXBLwGxtq}
 }
 @inproceedings{shetty2024building,
   title = {Building AI Agents for Autonomous Clouds: Challenges and Design Principles},

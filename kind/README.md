@@ -17,7 +17,7 @@ This document provides detailed, step-by-step instructions for building your own
 - [Deployment Steps](#deployment-steps)
   - [1. Build the Custom KIND Image](#1-build-the-custom-kind-image)
   - [2. (Optional) Push the Image to Dockerhub](#2-optional-push-the-image-to-dockerhub)
-  - [3. Create a kind Kubernetes Cluster](#4-create-a-kind-kubernetes-cluster)
+  - [3. Create a kind Kubernetes Cluster](#3-create-a-kind-kubernetes-cluster)
 - [Troubleshooting](#troubleshooting)
 - [Conclusion](#conclusion)
 
@@ -57,7 +57,7 @@ Docker is required to run Kubernetes and containers. Install Docker Desktop for 
 For native Ubuntu, install Docker using the following commands, follow the [official Docker installation guide](https://docs.docker.com/engine/install/ubuntu/).
 
 ### **Install kind**
-Install kind (Kubernetes IN Docker) to create a local Kubernetes cluster:
+Install kind (Kubernetes IN Docker) to create a local Kubernetes cluster (for the latest release, [kind releases](https://github.com/kubernetes-sigs/kind/releases)):
 ```bash
 curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
 chmod +x ./kind
@@ -107,7 +107,7 @@ For more information, see the [Helm installation guide](https://helm.sh/docs/int
 
 ### 1. Build the Custom KIND Image
 
-The Dockerfile in this directory is designed specifically for Ubuntu running under WSL2 (amd64). **Please refer to this Dockerfile** to build an image that is compatible with your own machine 
+The Dockerfile in this directory is designed specifically for Ubuntu running under WSL2 (amd64). **Please refer to this [Dockerfile](/kind/Dockerfile)** to build an image that is compatible with your own machine 
 
 Build the custom image using:
 
@@ -124,8 +124,13 @@ If you wish to publish your custom image and have it referenced by the kind conf
 docker push your_dockerhub_username/aiopslab-kind:latest
 ```
 
-Remember to update the `kind-config.yaml` file with your image name if you are using your own published image.
+Remember to create a `kind-config-custom.yaml` file similar to [kind-config-x86.yaml](/kind/kind-config-x86.yaml) with your image name if you are using your own published image.
 
+### 3. Create a kind Kubernetes Cluster
+```
+# Using custom image
+kind create cluster --config kind/kind-config-custom.yaml
+```
 
 After finishing cluster creation, proceed to the next "Update config.yml" step.
 
