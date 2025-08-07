@@ -20,16 +20,16 @@ class Shell:
     def exec(command: str, input_data=None, cwd=None):
         """Execute a shell command on localhost, via SSH, or inside kind's control-plane container."""
         k8s_host = config.get("k8s_host", "localhost")  # Default to localhost
-
+        
         if k8s_host == "kind":
             return Shell.docker_exec("kind-control-plane", command)
 
         elif k8s_host == "localhost":
-            print(
-                "[WARNING] Running commands on localhost is not recommended. "
-                "This may pose safety and security risks when using an AI agent locally. "
-                "I hope you know what you're doing!!!"
-            )
+            # print(
+            #     "[WARNING] Running commands on localhost is not recommended. "
+            #     "This may pose safety and security risks when using an AI agent locally. "
+            #     "I hope you know what you're doing!!!"
+            # )
             return Shell.local_exec(command, input_data, cwd)
 
         else:
@@ -50,14 +50,15 @@ class Shell:
                 stderr=subprocess.PIPE,
                 shell=True,
                 cwd=cwd,
+                timeout=10, # need to account for this properly
             )
 
-            if out.stderr or out.returncode != 0:
+            if out.returncode != 0:
                 error_message = out.stderr.decode("utf-8")
                 print(f"[ERROR] Command execution failed: {error_message}")
                 return error_message
             else:
-                output_message = out.stdout.decode("utf-8")
+                output_message = out.stdout.decode("utf-8") + out.stderr.decode("utf-8")
                 print(output_message)
                 return output_message
 

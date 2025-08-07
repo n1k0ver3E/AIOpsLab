@@ -15,6 +15,7 @@ class Application:
         self.helm_deploy = True
         self.helm_configs = {}
         self.k8s_deploy_path = None
+        self.docker_deploy_path = None
 
     def load_app_json(self):
         """Load (basic) application metadata into attributes.
@@ -35,6 +36,9 @@ class Application:
 
         if "K8S Deploy Path" in metadata:
             self.k8s_deploy_path = TARGET_MICROSERVICES / metadata["K8S Deploy Path"]
+        
+        if "Docker Deploy Path" in metadata:
+            self.docker_deploy_path = TARGET_MICROSERVICES / metadata["Docker Deploy Path"]
 
     def get_app_json(self) -> dict:
         """Get application metadata in JSON format.

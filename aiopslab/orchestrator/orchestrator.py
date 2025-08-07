@@ -45,24 +45,26 @@ class Orchestrator:
         self.session = Session()
         print(f"Session ID: {self.session.session_id}")
         prob = self.probs.get_problem_instance(problem_id)
+        deployment = self.probs.get_problem_deployment(problem_id)
         self.session.set_problem(prob, pid=problem_id)
         self.session.set_agent(self.agent_name)
 
-        print("Setting up OpenEBS...")
+        if deployment != "docker":
+            print("Setting up OpenEBS...")
 
-        # Install OpenEBS
-        self.kubectl.exec_command(
-            "kubectl apply -f https://openebs.github.io/charts/openebs-operator.yaml"
-        )
-        self.kubectl.exec_command(
-            "kubectl patch storageclass openebs-hostpath -p '{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
-        )
-        self.kubectl.wait_for_ready("openebs")
-        print("OpenEBS setup completed.")
+            # Install OpenEBS
+            self.kubectl.exec_command(
+                "kubectl apply -f https://openebs.github.io/charts/openebs-operator.yaml"
+            )
+            self.kubectl.exec_command(
+                "kubectl patch storageclass openebs-hostpath -p '{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
+            )
+            self.kubectl.wait_for_ready("openebs")
+            print("OpenEBS setup completed.")
 
-        # Setup and deploy Prometheus
-        self.prometheus = Prometheus()
-        self.prometheus.deploy()
+            # Setup and deploy Prometheus
+            self.prometheus = Prometheus()
+            self.prometheus.deploy()
 
         # deploy service
         prob.app.delete()
@@ -200,13 +202,15 @@ class Orchestrator:
         # But this will take more time.
         # if not self.session.problem.sys_status_after_recovery():
         self.session.problem.app.cleanup()
-        self.prometheus.teardown()
-        print("Uninstalling OpenEBS...")
-        self.kubectl.exec_command("kubectl delete sc openebs-hostpath openebs-device --ignore-not-found")
-        self.kubectl.exec_command(
-            "kubectl delete -f https://openebs.github.io/charts/openebs-operator.yaml"
-        )
-        self.kubectl.wait_for_namespace_deletion("openebs")
+        
+        if self.session.problem.namespace != "docker":
+            self.prometheus.teardown()
+            print("Uninstalling OpenEBS...")
+            self.kubectl.exec_command("kubectl delete sc openebs-hostpath openebs-device --ignore-not-found")
+            self.kubectl.exec_command(
+                "kubectl delete -f https://openebs.github.io/charts/openebs-operator.yaml"
+            )
+            self.kubectl.wait_for_namespace_deletion("openebs")
 
         self.execution_end_time = time.time()
         total_execution_time = self.execution_end_time - self.execution_start_time

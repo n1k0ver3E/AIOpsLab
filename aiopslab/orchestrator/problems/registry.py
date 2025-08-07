@@ -27,6 +27,8 @@ from aiopslab.orchestrator.problems.recommendation_service_cache_failure import 
 from aiopslab.orchestrator.problems.redeploy_without_pv import *
 from aiopslab.orchestrator.problems.wrong_bin_usage import *
 from aiopslab.orchestrator.problems.operator_misoperation import *
+from aiopslab.orchestrator.problems.flower_node_stop import *
+from aiopslab.orchestrator.problems.flower_model_misconfig import *
 
 
 class ProblemRegistry:
@@ -211,7 +213,14 @@ class ProblemRegistry:
             # "operator_security_context_fault-localization-1": K8SOperatorSecurityContextFaultLocalization,
             # "operator_wrong_update_strategy-detection-1": K8SOperatorWrongUpdateStrategyDetection,
             # "operator_wrong_update_strategy-localization-1": K8SOperatorWrongUpdateStrategyLocalization,
+            # Flower
+            "flower_node_stop-detection": FlowerNodeStopDetection,
+            "flower_model_misconfig-detection": FlowerModelMisconfigDetection,
         }
+        self.DOCKER_REGISTRY = [
+            "flower_node_stop-detection",
+            "flower_model_misconfig-detection",
+        ]
 
     def get_problem_instance(self, problem_id: str):
         if problem_id not in self.PROBLEM_REGISTRY:
@@ -231,3 +240,8 @@ class ProblemRegistry:
         if task_type:
             return len([k for k in self.PROBLEM_REGISTRY.keys() if task_type in k])
         return len(self.PROBLEM_REGISTRY)
+    
+    def get_problem_deployment(self, problem_id: str):
+        if problem_id in self.DOCKER_REGISTRY:
+            return "docker"
+        return "k8s"
