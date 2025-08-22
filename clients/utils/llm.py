@@ -232,6 +232,50 @@ class vLLMClient:
         return response
 
 
+class OpenRouterClient:
+    """Abstraction for OpenRouter API with support for multiple models."""
+
+    def __init__(self, model="anthropic/claude-3.5-sonnet"):
+        self.cache = Cache()
+        self.model = model
+
+    def inference(self, payload: list[dict[str, str]]) -> list[str]:
+        if self.cache is not None:
+            cache_result = self.cache.get_from_cache(payload)
+            if cache_result is not None:
+                return cache_result
+
+        client = OpenAI(
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1"
+        )
+        try:
+            response = client.chat.completions.create(
+                messages=payload,  # type: ignore
+                model=self.model,
+                max_tokens=1024,
+                temperature=0.5,
+                top_p=0.95,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                n=1,
+                timeout=60,
+                stop=[],
+            )
+        except Exception as e:
+            print(f"Exception: {repr(e)}")
+            raise e
+
+        return [c.message.content for c in response.choices]  # type: ignore
+
+    def run(self, payload: list[dict[str, str]]) -> list[str]:
+        response = self.inference(payload)
+        if self.cache is not None:
+            self.cache.add_to_cache(payload, response)
+            self.cache.save_cache()
+        return response
+
+
 class LLaMAClient:
     """Abstraction for Meta's LLaMA-3 model."""
 
