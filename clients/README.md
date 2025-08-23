@@ -11,6 +11,7 @@ These clients are some baselines that we have implemented and evaluated to help 
 - [vLLM](/clients/vllm.py): A naive vLLM agent with any open source LLM deployed locally and only shell access.
 - [ReAct](/clients/react.py): A naive LLM agent that uses the ReAct framework.
 - [FLASH](/clients/flash.py): A naive LLM agent that uses status supervision and hindsight integration components to ensure the high reliability of workflow execution.
+- [OpenRouter](/clients/openrouter.py): A naive OpenRouter LLM agent with only shell access.
 
 ### Using the vLLM Client
 
@@ -19,13 +20,13 @@ The vLLM client allows you to run local open-source models as an agent for AIOps
 - Experiment with different open-source models
 - Work in environments without internet access to cloud LLM providers
 
-### Quick Setup Guide
+#### Quick Setup Guide
 
 1. **Launch the vLLM server**:
     ```bash
     # Make the script executable
     chmod +x ./clients/launch_vllm.sh
-   
+
     # Run the script
     ./clients/launch_vllm.sh
     ```
@@ -42,7 +43,7 @@ The vLLM client allows you to run local open-source models as an agent for AIOps
     ```bash
     # Open the file
     nano ./clients/launch_vllm.sh
-    
+
     # Change the MODEL variable to your preferred model
     # Example: MODEL="mistralai/Mistral-7B-Instruct-v0.1"
     ```
@@ -52,17 +53,37 @@ The vLLM client allows you to run local open-source models as an agent for AIOps
     python clients/vllm.py
     ```
 
-### Requirements
+#### Requirements
 
 - Poetry for dependency management
 - Sufficient GPU resources for your chosen model
 - The model must support the OpenAI chat completion API format
 
-### Advanced Configuration
+#### Advanced Configuration
 
 The vLLM client connects to `http://localhost:8000/v1` by default. If you've configured vLLM to use a different port or host, update the base_url in `clients/utils/llm.py` in the vLLMClient class.
 
-<!-- 
+## Environment Variables
+
+The following environment variables are used by various clients. Copy `.env.example` to `.env` and fill in your API keys:
+
+```bash
+cp .env.example .env
+# Edit .env with your actual API keys
+```
+
+### API Keys (Required for respective clients)
+- `OPENAI_API_KEY`: OpenAI API key for GPT clients
+- `DEEPSEEK_API_KEY`: DeepSeek API key for DeepSeek client
+- `DASHSCOPE_API_KEY`: Alibaba DashScope API key for Qwen client
+- `OPENROUTER_API_KEY`: OpenRouter API key for OpenRouter client
+- `GROQ_API_KEY`: Groq API key for Groq-based clients
+
+### Optional Configuration
+- `OPENROUTER_MODEL`: OpenRouter model to use (default: `openai/gpt-4o-mini`)
+- `USE_WANDB`: Enable Weights & Biases logging (default: `false`)
+
+<!--
 Note: The script [GPT-managed-identity](/clients/gpt_managed_identity.py) uses the `DefaultAzureCredential` method from the `azure-identity` package to authenticate. This method simplifies authentication by supporting various credential types, including managed identities.
 
 We recommend using a [user-assigned managed identity](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/how-manage-user-assigned-managed-identities?pivots=identity-mi-methods-azp) for this setup. Ensure the following steps are completed:
@@ -71,12 +92,12 @@ We recommend using a [user-assigned managed identity](https://learn.microsoft.co
     - A role that provides read access to the VM, such as the built-in **Reader** role.
     - A role that grants read/write access to the Azure OpenAI Service, such as the **Azure AI Developer** role.
 
-2. **Attach the Managed Identity to the Controller VM**:  
-    Follow the steps in the official documentation to add the managed identity to the VM:  
+2. **Attach the Managed Identity to the Controller VM**:
+    Follow the steps in the official documentation to add the managed identity to the VM:
     [Add a user-assigned managed identity to a VM](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities?pivots=qs-configure-portal-windows-vm#user-assigned-managed-identity).
 
 Please ensure the required Azure configuration is provided using the /configs/example_azure_config.yml file, or use it as a template to create a new configuration file
 
 ### Useful Links
-1. [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity)  
+1. [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity)
 2. [Azure Identity client library for Python](https://learn.microsoft.com/en-us/python/api/overview/azure/identity-readme?view=azure-python#defaultazurecredential) -->
