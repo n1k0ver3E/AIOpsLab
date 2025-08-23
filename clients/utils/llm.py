@@ -25,7 +25,7 @@ load_dotenv()
 
 CACHE_DIR = Path("./cache_dir")
 CACHE_PATH = CACHE_DIR / "cache.json"
-MODEL = "gpt-4o"
+GPT_MODEL = "gpt-4o"
 
 
 @dataclass
@@ -120,7 +120,7 @@ class GPTClient:
         try:
             response = self.client.chat.completions.create(
                 messages=payload,  # type: ignore
-                model=MODEL,
+                model=GPT_MODEL,
                 max_tokens=1024,
                 temperature=0.5,
                 top_p=0.95,
