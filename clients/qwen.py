@@ -17,9 +17,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class QwenAgent:
-    def __init__(self):
+    def __init__(self,
+                 model="qwen-plus"):
         self.history = []
-        self.llm = QwenClient()
+        self.model = model
+        self.llm = QwenClient(model=self.model)
 
     def init_context(self, problem_desc: str, instructions: str, apis: str):
         """Initialize the context for the agent."""
@@ -110,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument('--max-steps', type=int, default=30,
                        help='Maximum steps per problem (default: 30)')
     parser.add_argument('--model', type=str,
-                       default=os.getenv("QWEN_MODEL", "openai/gpt-4o-mini"),
+                       default=os.getenv("QWEN_MODEL", "qwen-plus"),
                        help='qwen model to use')
 
     args = parser.parse_args()
@@ -159,7 +161,7 @@ if __name__ == "__main__":
 
     for pid in problems:
         print(f"\n=== Starting problem: {pid} ===")
-        agent = QwenAgent()
+        agent = QwenAgent(model=model)
 
         orchestrator = Orchestrator(results_dir=results_dir)
         orchestrator.register_agent(agent, name=agent_name)

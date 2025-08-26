@@ -172,8 +172,8 @@ class QwenClient:
                  is_stream=True):
         self.cache = Cache()
         self.model = os.getenv("QWEN_MODEL", model)
-        self.max_tokens = max_tokens
-        self.is_stream = is_stream
+        self.max_tokens = os.getenv("QWEN_MAX_TOKENS", max_tokens)
+        self.is_stream = os.getenv("QWEN_IS_STREAM", is_stream)
 
     def inference(self, payload: list[dict[str, str]]) -> list[str]:
         if self.cache is not None:
