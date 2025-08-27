@@ -54,6 +54,7 @@ class QwenAgent:
         """
         self.history.append({"role": "user", "content": input})
         response = self.llm.run(self.history)
+        print(f"===== Agent (Qwen - {self.llm.model}) ====\n{response[0]}")
         self.history.append({"role": "assistant", "content": response[0]})
         return response[0]
 
