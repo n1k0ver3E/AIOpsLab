@@ -305,6 +305,8 @@ class OpenRouterClient:
             base_url="https://openrouter.ai/api/v1"
         )
         try:
+            print("===== prompt =====")
+            print(payload)
             response = client.chat.completions.create(
                 messages=payload,  # type: ignore
                 model=self.model,
