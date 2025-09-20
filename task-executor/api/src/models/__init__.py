@@ -1,7 +1,7 @@
 """Database models for AIOpsLab Task Execution API."""
 
 # Import enums directly as they don't require database
-from .enums import TaskStatus, WorkerStatus, LogLevel
+from .enums import TaskStatus, TaskType, WorkerStatus, LogLevel
 
 # Lazy imports for database-dependent objects
 def __getattr__(name):
@@ -39,6 +39,9 @@ def __getattr__(name):
     elif name == "MessageRole":
         from .llm_conversation import MessageRole
         return MessageRole
+    elif name == "RLInteraction":
+        from .rl_interaction import RLInteraction
+        return RLInteraction
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
@@ -52,10 +55,12 @@ __all__ = [
     # Models
     "Task",
     "TaskStatus",
+    "TaskType",
     "Worker",
     "WorkerStatus",
     "TaskLog",
     "LogLevel",
     "LLMConversation",
     "MessageRole",
+    "RLInteraction",
 ]

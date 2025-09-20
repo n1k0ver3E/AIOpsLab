@@ -6,7 +6,7 @@ from datetime import datetime
 from uuid import UUID
 import re
 
-from ..models import TaskStatus
+from ..models import TaskStatus, TaskType
 
 
 class TaskCreate(BaseModel):
@@ -18,6 +18,12 @@ class TaskCreate(BaseModel):
         min_length=1,
         max_length=255,
         examples=["sock-shop-chaos"]
+    )
+
+    task_type: TaskType = Field(
+        default=TaskType.STANDARD,
+        description="Type of task execution",
+        examples=["standard", "rl_training"]
     )
 
     parameters: Dict[str, Any] = Field(
@@ -58,6 +64,7 @@ class TaskResponse(BaseModel):
 
     id: UUID = Field(..., description="Unique task identifier")
     problem_id: str = Field(..., description="Problem identifier")
+    task_type: TaskType = Field(..., description="Task execution type")
     status: TaskStatus = Field(..., description="Current task status")
     parameters: Dict[str, Any] = Field(..., description="Task parameters")
 

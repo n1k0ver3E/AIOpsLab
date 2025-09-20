@@ -9,7 +9,7 @@ from typing import AsyncGenerator
 from .config.settings import settings
 from .config.logging import get_logger
 from .models import init_db, close_db, async_session
-from .api import tasks, workers, workers_internal, health, llm_conversations
+from .api import tasks, workers, workers_internal, health, llm_conversations, rl_training
 from .middleware.error_handler import error_handler_middleware
 from .middleware.request_id import request_id_middleware
 from .monitoring.metrics import PrometheusMiddleware, metrics_endpoint
@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(workers.router, prefix="/api/v1", tags=["Workers"])
     app.include_router(workers_internal.router, prefix="/api/v1", tags=["Internal Workers"])
     app.include_router(llm_conversations.router, tags=["LLM Conversations"])
+    app.include_router(rl_training.router, prefix="/api/v1", tags=["RL Training"])
 
     return app
 

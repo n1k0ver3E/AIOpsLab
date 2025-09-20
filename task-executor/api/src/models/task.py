@@ -4,11 +4,12 @@ from sqlalchemy import (
     Column, String, DateTime, Text, Enum, Index, CheckConstraint, func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
 
 from .database import Base
-from .enums import TaskStatus
+from .enums import TaskStatus, TaskType
 
 
 class Task(Base):
@@ -30,6 +31,14 @@ class Task(Base):
         nullable=False,
         index=True,
         comment="AIOpsLab problem identifier"
+    )
+
+    task_type = Column(
+        Enum(TaskType, name="task_type", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        default=TaskType.STANDARD,
+        index=True,
+        comment="Task execution type"
     )
 
     status = Column(
@@ -102,6 +111,7 @@ class Task(Base):
         Index('idx_tasks_status_created', 'status', 'created_at'),
         Index('idx_tasks_worker_status', 'worker_id', 'status'),
         Index('idx_tasks_problem_id_status', 'problem_id', 'status'),
+        Index('idx_tasks_type_status', 'task_type', 'status'),
 
         # GIN indexes for JSONB queries
         Index('idx_tasks_parameters', 'parameters', postgresql_using='gin'),
@@ -126,11 +136,15 @@ class Task(Base):
         ),
     )
 
+    # Relationships
+    rl_interactions = relationship("RLInteraction", back_populates="task", cascade="all, delete-orphan")
+
     def to_dict(self) -> dict:
         """Convert task to dictionary."""
         return {
             "id": str(self.id),
             "problem_id": self.problem_id,
+            "task_type": self.task_type.value if self.task_type else None,
             "status": self.status.value if self.status else None,
             "parameters": self.parameters or {},
             "worker_id": self.worker_id,

@@ -31,7 +31,7 @@ from aiopslab.session import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .executor import TaskExecutor
-from ..models import Task, LLMConversation, MessageRole
+from ..models import Task, TaskType, LLMConversation, MessageRole
 from ..config.logging import get_logger
 from ..config.settings import settings
 
@@ -49,6 +49,8 @@ class OrchestratorExecutor(TaskExecutor):
         self.orchestrator = None
         self.current_conversation = None
         self.agent = None
+        self.rl_mode = False
+        self.rl_initialized = False
 
     @staticmethod
     def _get_default_model() -> Optional[str]:
@@ -150,6 +152,14 @@ class OrchestratorExecutor(TaskExecutor):
 
     async def execute(self, task: Task) -> Dict[str, Any]:
         """Execute a task using the real orchestrator."""
+        # Check if this is an RL training task
+        if task.task_type == TaskType.RL_TRAINING:
+            return await self._execute_rl_task(task)
+        else:
+            return await self._execute_standard_task(task)
+    
+    async def _execute_standard_task(self, task: Task) -> Dict[str, Any]:
+        """Execute a standard task using the real orchestrator."""
         try:
             logger.info(
                 "orchestrator.task.start",
@@ -551,6 +561,344 @@ class OrchestratorExecutor(TaskExecutor):
 
         await self.session.commit()
         self.current_conversation = None
+
+    async def _execute_rl_task(self, task: Task) -> Dict[str, Any]:
+        """Initialize RL training environment but don't run full orchestrator."""
+        try:
+            logger.info(
+                "orchestrator.rl.task.start",
+                task_id=str(task.id),
+                problem_id=task.problem_id,
+                worker_id=self.worker_id
+            )
+
+            # Setup cluster
+            if not await self.setup_cluster():
+                return {
+                    "success": False,
+                    "error": "Failed to setup Kind cluster"
+                }
+
+            previous_container = os.getenv("KIND_CONTAINER_NAME")
+            os.environ["KIND_CONTAINER_NAME"] = f"{self.cluster_name}-control-plane"
+
+            try:
+                # Initialize orchestrator and problem
+                results_dir = Path("/tmp/aiopslab") / str(task.id)
+                results_dir.mkdir(parents=True, exist_ok=True)
+                self.orchestrator = Orchestrator(results_dir=results_dir)
+                
+                # Initialize the problem but don't run agent
+                prob_desc, task_desc, actions = self.orchestrator.init_problem(task.problem_id)
+                
+                # Create conversation record for RL interactions
+                agent_config = self._prepare_agent_config(task.parameters.get("agent_config"))
+                self.current_conversation = await self._create_conversation(task, agent_config)
+
+                # Log initial problem description
+                await self._log_message(
+                    MessageRole.SYSTEM,
+                    f"RL Training Started - Problem: {prob_desc}\nTask: {task_desc}",
+                    metadata={
+                        "problem_id": task.problem_id,
+                        "task_type": "rl_training",
+                        "session_id": str(self.orchestrator.session.session_id) if self.orchestrator.session else None
+                    }
+                )
+
+                self.rl_mode = True
+                self.rl_initialized = True
+
+                logger.info(
+                    "orchestrator.rl.initialized",
+                    task_id=str(task.id),
+                    problem_id=task.problem_id,
+                    session_id=str(self.orchestrator.session.session_id) if self.orchestrator.session else None
+                )
+
+                # Return initialization success - task will remain RUNNING for RL updates
+                return {
+                    "success": True,
+                    "rl_mode": True,
+                    "problem_id": task.problem_id,
+                    "session_id": str(self.orchestrator.session.session_id) if self.orchestrator.session else None,
+                    "conversation_id": str(self.current_conversation.id),
+                    "available_actions": actions,
+                    "problem_description": prob_desc,
+                    "task_description": task_desc,
+                    "execution_time": datetime.utcnow().isoformat(),
+                    "status": "rl_ready"
+                }
+            finally:
+                if previous_container is None:
+                    os.environ.pop("KIND_CONTAINER_NAME", None)
+                else:
+                    os.environ["KIND_CONTAINER_NAME"] = previous_container
+
+        except Exception as e:
+            logger.exception(
+                "orchestrator.rl.task.failed",
+                task_id=str(task.id)
+            )
+
+            if self.current_conversation:
+                await self._log_message(
+                    MessageRole.SYSTEM,
+                    f"RL task initialization failed: {str(e)}",
+                    metadata={"error": str(e)}
+                )
+                await self._end_conversation(success=False, error=str(e))
+
+            return {
+                "success": False,
+                "error": str(e),
+                "execution_time": datetime.utcnow().isoformat()
+            }
+
+    async def execute_rl_command(self, command: str) -> Dict[str, Any]:
+        """Execute a shell command in the RL environment and return results."""
+        if not self.rl_mode or not self.rl_initialized:
+            raise RuntimeError("RL mode not initialized")
+
+        try:
+            logger.info(
+                "orchestrator.rl.command.start",
+                command=command[:100],
+                worker_id=self.worker_id
+            )
+
+            # Set the correct kubectl context for this cluster
+            previous_container = os.getenv("KIND_CONTAINER_NAME")
+            os.environ["KIND_CONTAINER_NAME"] = f"{self.cluster_name}-control-plane"
+
+            try:
+                # Execute command using the same method as the main orchestrator
+                stdout, stderr, exit_code = await self._run_command_in_cluster(command)
+
+                # Log the interaction
+                if self.current_conversation:
+                    await self._log_message(
+                        MessageRole.USER,
+                        f"RL Command: {command}",
+                        metadata={
+                            "command_type": "rl_command",
+                            "exit_code": exit_code
+                        }
+                    )
+                    
+                    await self._log_message(
+                        MessageRole.ASSISTANT,
+                        f"Command Output:\nSTDOUT:\n{stdout[:1000]}\nSTDERR:\n{stderr[:1000]}",
+                        metadata={
+                            "command": command,
+                            "exit_code": exit_code,
+                            "stdout_length": len(stdout),
+                            "stderr_length": len(stderr)
+                        }
+                    )
+
+                result = {
+                    "command": command,
+                    "exit_code": exit_code,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+                logger.info(
+                    "orchestrator.rl.command.complete",
+                    command=command[:100],
+                    exit_code=exit_code,
+                    worker_id=self.worker_id
+                )
+
+                return result
+            finally:
+                if previous_container is None:
+                    os.environ.pop("KIND_CONTAINER_NAME", None)
+                else:
+                    os.environ["KIND_CONTAINER_NAME"] = previous_container
+
+        except Exception as e:
+            logger.error(
+                "orchestrator.rl.command.error",
+                command=command[:100],
+                error=str(e),
+                worker_id=self.worker_id
+            )
+            raise
+
+    async def _run_command_in_cluster(self, command: str) -> Tuple[str, str, int]:
+        """Execute a command in the Kind cluster context."""
+        # For kubectl commands, execute directly
+        if command.startswith("kubectl"):
+            return await self._run_command(*command.split())
+        
+        # For other commands, execute in a pod or use kubectl exec
+        # This is a simplified approach - in production you might want to:
+        # 1. Create a debug pod
+        # 2. Use kubectl exec to run commands in application pods
+        # 3. Set up a persistent shell session
+        
+        # For now, we'll run simple commands directly and kubectl commands in cluster
+        if command.startswith(("ps", "top", "df", "free", "netstat", "ss", "lsof")):
+            # System monitoring commands - run on the node
+            kubectl_command = [
+                "kubectl", "debug", "node/aiopslab-worker", "-it", "--image=busybox", 
+                "--", "sh", "-c", command
+            ]
+            return await self._run_command(*kubectl_command)
+        else:
+            # Execute as kubectl command or in application context
+            return await self._run_command("sh", "-c", command)
+
+    async def get_environment_state(self) -> Dict[str, Any]:
+        """Get current environment state for RL agent."""
+        if not self.rl_mode or not self.orchestrator:
+            raise RuntimeError("RL mode not initialized")
+
+        try:
+            # Collect metrics from orchestrator's observability systems
+            metrics = await self._collect_rl_metrics()
+            logs = await self._collect_rl_logs()
+            k8s_status = await self._collect_rl_k8s_status()
+            system_state = await self._collect_rl_system_state()
+
+            return {
+                "metrics": metrics,
+                "logs": logs,
+                "kubernetes_status": k8s_status,
+                "system_state": system_state,
+                "session_id": str(self.orchestrator.session.session_id) if self.orchestrator.session else None,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(
+                "orchestrator.rl.env_state.error",
+                error=str(e),
+                worker_id=self.worker_id
+            )
+            raise
+
+    async def _collect_rl_metrics(self) -> Dict[str, Any]:
+        """Collect metrics from AIOpsLab observability."""
+        try:
+            # Use orchestrator's observer if available
+            if self.orchestrator and hasattr(self.orchestrator, 'observer'):
+                # This would integrate with the actual AIOpsLab observer
+                # For now, return basic cluster metrics
+                pass
+
+            # Collect basic Kubernetes metrics
+            stdout, stderr, code = await self._run_command(
+                "kubectl", "top", "nodes", "--no-headers"
+            )
+            
+            node_metrics = {}
+            if code == 0:
+                for line in stdout.strip().split('\n'):
+                    if line.strip():
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            node_metrics[parts[0]] = {
+                                "cpu": parts[1],
+                                "memory": parts[2]
+                            }
+
+            return {
+                "node_metrics": node_metrics,
+                "collection_time": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            logger.warning("rl.metrics.collection.failed", error=str(e))
+            return {"error": str(e)}
+
+    async def _collect_rl_logs(self) -> List[Dict[str, Any]]:
+        """Collect recent logs from AIOpsLab environment."""
+        try:
+            # Get recent pod logs
+            stdout, stderr, code = await self._run_command(
+                "kubectl", "get", "pods", "-o", "json"
+            )
+            
+            logs = []
+            if code == 0:
+                import json
+                pods_data = json.loads(stdout)
+                for pod in pods_data.get("items", [])[:5]:  # Limit to 5 pods
+                    pod_name = pod["metadata"]["name"]
+                    log_stdout, log_stderr, log_code = await self._run_command(
+                        "kubectl", "logs", pod_name, "--tail=10"
+                    )
+                    if log_code == 0:
+                        logs.append({
+                            "pod": pod_name,
+                            "logs": log_stdout[:500],  # Limit log size
+                            "timestamp": datetime.utcnow().isoformat()
+                        })
+
+            return logs
+
+        except Exception as e:
+            logger.warning("rl.logs.collection.failed", error=str(e))
+            return [{"error": str(e)}]
+
+    async def _collect_rl_k8s_status(self) -> Dict[str, Any]:
+        """Collect Kubernetes cluster status."""
+        try:
+            # Get pod status
+            stdout, stderr, code = await self._run_command(
+                "kubectl", "get", "pods", "--no-headers"
+            )
+            
+            pod_status = {"running": 0, "pending": 0, "failed": 0, "succeeded": 0}
+            if code == 0:
+                for line in stdout.strip().split('\n'):
+                    if line.strip():
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            status = parts[2].lower()
+                            if "running" in status:
+                                pod_status["running"] += 1
+                            elif "pending" in status:
+                                pod_status["pending"] += 1
+                            elif "failed" in status or "error" in status:
+                                pod_status["failed"] += 1
+                            elif "completed" in status or "succeeded" in status:
+                                pod_status["succeeded"] += 1
+
+            return {
+                "pod_status": pod_status,
+                "cluster_name": self.cluster_name,
+                "collection_time": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            logger.warning("rl.k8s.collection.failed", error=str(e))
+            return {"error": str(e)}
+
+    async def _collect_rl_system_state(self) -> Dict[str, Any]:
+        """Collect system state information."""
+        try:
+            # Get basic cluster info
+            stdout, stderr, code = await self._run_command(
+                "kubectl", "cluster-info"
+            )
+            
+            cluster_info = stdout[:500] if code == 0 else f"Error: {stderr[:200]}"
+            
+            return {
+                "cluster_info": cluster_info,
+                "worker_id": self.worker_id,
+                "rl_mode": self.rl_mode,
+                "collection_time": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            logger.warning("rl.system.collection.failed", error=str(e))
+            return {"error": str(e)}
 
     async def cleanup(self):
         """Cleanup resources."""

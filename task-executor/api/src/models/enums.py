@@ -27,3 +27,9 @@ class LogLevel(str, enum.Enum):
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
+
+
+class TaskType(str, enum.Enum):
+    """Task execution type."""
+    STANDARD = "standard"
+    RL_TRAINING = "rl_training"

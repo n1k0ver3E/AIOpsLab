@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     NUM_INTERNAL_WORKERS: int = 1  # Number of internal workers to start
     AUTO_START_WORKERS: bool = True  # Auto-start internal workers
 
+    # RL Training Settings
+    ENABLE_RL_JUDGE: bool = True  # Enable LLM judge for RL interactions
+    RL_COMMAND_TIMEOUT: int = 30  # Timeout for RL command execution (seconds)
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"  # json or text
