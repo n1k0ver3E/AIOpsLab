@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from ...models import Task, TaskStatus, Worker, WorkerStatus
 from ...config.logging import get_logger
+import pytz
 
 logger = get_logger(__name__)
 
@@ -102,10 +103,11 @@ class TaskQueue:
 
         if task:
             # Update task with worker assignment
+            tz = pytz.timezone("Asia/Shanghai")
             task.status = TaskStatus.RUNNING
             task.worker_id = worker_id
-            task.started_at = datetime.utcnow()
-            task.updated_at = datetime.utcnow()
+            task.started_at = datetime.now(tz)
+            task.updated_at = datetime.now(tz)
 
             await self.session.commit()
             await self.session.refresh(task)
@@ -134,10 +136,11 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.COMPLETED):
             raise ValueError(f"Task {task_id} cannot transition to completed from {task.status}")
 
+        tz = pytz.timezone("Asia/Shanghai")
         task.status = TaskStatus.COMPLETED
         task.result = result
-        task.completed_at = datetime.utcnow()
-        task.updated_at = datetime.utcnow()
+        task.completed_at = datetime.now(tz)
+        task.updated_at = datetime.now(tz)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -163,10 +166,11 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.FAILED):
             raise ValueError(f"Task {task_id} cannot transition to failed from {task.status}")
 
+        tz = pytz.timezone("Asia/Shanghai")
         task.status = TaskStatus.FAILED
         task.error_details = error_details
-        task.completed_at = datetime.utcnow()
-        task.updated_at = datetime.utcnow()
+        task.completed_at = datetime.now(tz)
+        task.updated_at = datetime.now(tz)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -188,11 +192,12 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.TIMEOUT):
             raise ValueError(f"Task {task_id} cannot transition to timeout from {task.status}")
 
+        tz = pytz.timezone("Asia/Shanghai")
         timeout_minutes = task.parameters.get("timeout_minutes", 30)
         task.status = TaskStatus.TIMEOUT
         task.error_details = f"Task exceeded timeout limit of {timeout_minutes} minutes"
-        task.completed_at = datetime.utcnow()
-        task.updated_at = datetime.utcnow()
+        task.completed_at = datetime.now(tz)
+        task.updated_at = datetime.now(tz)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -214,9 +219,10 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.CANCELLED):
             raise ValueError(f"Task {task_id} cannot be cancelled from {task.status}")
 
+        tz = pytz.timezone("Asia/Shanghai")
         task.status = TaskStatus.CANCELLED
-        task.completed_at = datetime.utcnow()
-        task.updated_at = datetime.utcnow()
+        task.completed_at = datetime.now(tz)
+        task.updated_at = datetime.now(tz)
 
         await self.session.commit()
         await self.session.refresh(task)

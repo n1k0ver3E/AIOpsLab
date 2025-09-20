@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     WORKER_HEARTBEAT_TIMEOUT: int = 60  # seconds
     WORKER_OFFLINE_THRESHOLD: int = 120  # seconds
     WORKER_POLL_INTERVAL: int = 5  # seconds
-    NUM_INTERNAL_WORKERS: int = 3  # Number of internal workers to start
+    NUM_INTERNAL_WORKERS: int = 1  # Number of internal workers to start
     AUTO_START_WORKERS: bool = True  # Auto-start internal workers
 
     # Logging
