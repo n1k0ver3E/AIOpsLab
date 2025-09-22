@@ -1,7 +1,7 @@
 """RL Training API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -154,6 +154,68 @@ async def evaluate_with_judge(
         logger.error(
             "api.rl.judge.error",
             command=request.shell_command[:100],
+            error=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tasks/{task_id}/rl/reward-stats", response_model=Dict[str, Any], status_code=200)
+async def get_reward_statistics(
+    task_id: UUID = Path(..., description="Task ID"),
+    session: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get heuristic reward function statistics for a task.
+    
+    Returns detailed statistics about the task's interaction history,
+    including critical path hits, discoveries made, and exploration metrics.
+    """
+    try:
+        service = RLService(session)
+        stats = await service.get_task_reward_statistics(task_id)
+        
+        logger.info(
+            "api.rl.stats.success",
+            task_id=str(task_id)
+        )
+        
+        return stats
+
+    except Exception as e:
+        logger.error(
+            "api.rl.stats.error",
+            task_id=str(task_id),
+            error=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/tasks/{task_id}/rl/history", status_code=204)
+async def cleanup_task_history(
+    task_id: UUID = Path(..., description="Task ID"),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Clean up RL interaction history for a completed task.
+    
+    This should be called when a task completes to free up memory
+    and reset the heuristic reward function's internal state.
+    """
+    try:
+        service = RLService(session)
+        await service.cleanup_task_history(task_id)
+        
+        logger.info(
+            "api.rl.cleanup.success",
+            task_id=str(task_id)
+        )
+        
+        return  # 204 No Content
+
+    except Exception as e:
+        logger.error(
+            "api.rl.cleanup.error",
+            task_id=str(task_id),
             error=str(e)
         )
         raise HTTPException(status_code=500, detail=str(e))

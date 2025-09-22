@@ -17,6 +17,7 @@ from ..schemas.rl_update import (
 )
 from ..config.logging import get_logger
 from ..config.settings import settings
+from .heuristic_reward import HeuristicRewardFunction
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,7 @@ class RLService:
     
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.heuristic_reward = HeuristicRewardFunction()
     
     async def process_rl_update(self, request: RLUpdateRequest) -> RLUpdateResponse:
         """Process an RL update request."""
@@ -74,21 +76,56 @@ class RLService:
         await self.session.commit()
         await self.session.refresh(interaction)
         
-        # Evaluate with LLM judge (async, don't wait)
+        # Evaluate with both LLM judge and heuristic reward
         judge_evaluation = None
         if settings.ENABLE_RL_JUDGE:
             try:
+                # Try LLM judge first
                 judge_evaluation = await self._evaluate_with_judge(
                     request.shell_command, env_response, task
                 )
                 
-                # Update interaction with judge results
-                interaction.judge_score = judge_evaluation.score
-                interaction.judge_feedback = judge_evaluation.feedback
-                await self.session.commit()
-                
             except Exception as e:
                 logger.warning("rl.judge.error", error=str(e), task_id=str(request.task_id))
+        
+        # Always use heuristic reward as primary or fallback
+        if judge_evaluation is None:
+            # Use heuristic reward as primary evaluation
+            judge_evaluation = self.heuristic_reward.calculate_reward(
+                task_id=request.task_id,
+                problem_id=task.problem_id,
+                command=request.shell_command,
+                env_response=env_response,
+                step_number=step_number,
+                context={}
+            )
+            logger.info("rl.heuristic.primary", task_id=str(request.task_id))
+        else:
+            # Blend LLM judge with heuristic reward for enhanced evaluation
+            heuristic_eval = self.heuristic_reward.calculate_reward(
+                task_id=request.task_id,
+                problem_id=task.problem_id,
+                command=request.shell_command,
+                env_response=env_response,
+                step_number=step_number,
+                context={}
+            )
+            
+            # Weighted combination: 60% heuristic (ground truth), 40% LLM judge
+            blended_score = 0.6 * heuristic_eval.score + 0.4 * judge_evaluation.score
+            judge_evaluation = JudgeEvaluation(
+                score=blended_score,
+                feedback=f"Heuristic: {heuristic_eval.feedback} | LLM: {judge_evaluation.feedback}",
+                reasoning=f"Blended evaluation - Heuristic: {heuristic_eval.reasoning} | LLM: {judge_evaluation.reasoning}",
+                category=heuristic_eval.category  # Use heuristic category as primary
+            )
+            logger.info("rl.blended.evaluation", task_id=str(request.task_id), 
+                       heuristic_score=heuristic_eval.score, llm_score=judge_evaluation.score)
+        
+        # Update interaction with evaluation results
+        interaction.judge_score = judge_evaluation.score
+        interaction.judge_feedback = judge_evaluation.feedback
+        await self.session.commit()
         
         logger.info(
             "rl.update.complete",
@@ -362,14 +399,14 @@ class RLService:
                 try:
                     # Use the agent's get_action method to get evaluation
                     response = await judge_agent.get_action(prompt)
-                    return self._parse_judge_response(response, command, env_response)
+                    return self._parse_judge_response(response, command, env_response, task)
                 except Exception as e:
                     logger.warning("rl.judge.agent.failed", error=str(e))
                     # Fall back to rule-based evaluation
-                    return self._rule_based_evaluation(command, env_response)
+                    return self._rule_based_evaluation(command, env_response, task)
             else:
                 # No judge agent available, use rule-based evaluation
-                return self._rule_based_evaluation(command, env_response)
+                return self._rule_based_evaluation(command, env_response, task)
             
         except Exception as e:
             logger.error("rl.judge.evaluation.error", error=str(e))
@@ -447,7 +484,7 @@ Respond in this exact JSON format:
             logger.error("rl.judge.agent.creation.failed", error=str(e))
             return None
 
-    def _parse_judge_response(self, response: str, command: str, env_response: EnvironmentResponse) -> JudgeEvaluation:
+    def _parse_judge_response(self, response: str, command: str, env_response: EnvironmentResponse, task: Task = None) -> JudgeEvaluation:
         """Parse LLM judge response into structured evaluation."""
         try:
             # Try to parse as JSON
@@ -472,52 +509,64 @@ Respond in this exact JSON format:
         except Exception as e:
             logger.warning("rl.judge.parse.failed", error=str(e), response=response[:200])
             # Fallback to simple parsing or rule-based evaluation
-            return self._rule_based_evaluation(command, env_response)
+            return self._rule_based_evaluation(command, env_response, task)
 
-    def _rule_based_evaluation(self, command: str, env_response: EnvironmentResponse) -> JudgeEvaluation:
-        """Rule-based evaluation as fallback when LLM judge fails."""
-        exit_code = env_response.execution_output.get('exit_code', -1)
-        stdout = env_response.execution_output.get('stdout', '').lower()
-        stderr = env_response.execution_output.get('stderr', '').lower()
-        
-        # Basic scoring based on command characteristics
-        score = 0.5  # Default neutral score
-        category = "exploration"
-        
-        # Safety check - dangerous commands get low scores
-        dangerous_patterns = ['rm -rf', 'dd if=', 'mkfs', 'format', 'shutdown', 'reboot']
-        if any(pattern in command.lower() for pattern in dangerous_patterns):
-            score = 0.1
-            category = "error"
-            feedback = "Potentially dangerous command detected"
-        
-        # Positive scoring for useful diagnostic commands
-        elif command.startswith(('kubectl', 'docker', 'ps', 'top', 'netstat', 'lsof', 'df', 'free')):
-            if exit_code == 0:
-                score = 0.8
-                category = "monitoring"
-                feedback = f"Good diagnostic command executed successfully"
-            else:
-                score = 0.4
-                category = "exploration"
-                feedback = f"Diagnostic command failed but was appropriate to try"
-        
-        # Medium score for other system commands
-        elif exit_code == 0 and len(stdout) > 10:
-            score = 0.6
-            feedback = f"Command executed successfully and produced output"
-        elif exit_code != 0:
-            score = 0.3
-            feedback = f"Command failed with exit code {exit_code}"
+    def _rule_based_evaluation(self, command: str, env_response: EnvironmentResponse, task: Task = None) -> JudgeEvaluation:
+        """Enhanced rule-based evaluation using heuristic reward function."""
+        if task:
+            # Use full heuristic reward function if task context is available
+            return self.heuristic_reward.calculate_reward(
+                task_id=task.id,
+                problem_id=task.problem_id,
+                command=command,
+                env_response=env_response,
+                step_number=1,  # Default step number for fallback
+                context={}
+            )
         else:
-            feedback = f"Command executed but produced limited output"
+            # Fallback to basic safety-focused evaluation
+            exit_code = env_response.execution_output.get('exit_code', -1)
+            stdout = env_response.execution_output.get('stdout', '').lower()
+            stderr = env_response.execution_output.get('stderr', '').lower()
             
-        return JudgeEvaluation(
-            score=score,
-            feedback=feedback,
-            reasoning=f"Rule-based evaluation: exit_code={exit_code}, command_type='{category}'",
-            category=category
-        )
+            # Basic scoring based on command characteristics
+            score = 0.5  # Default neutral score
+            category = "exploration"
+            
+            # Safety check - dangerous commands get low scores
+            dangerous_patterns = ['rm -rf', 'dd if=', 'mkfs', 'format', 'shutdown', 'reboot']
+            if any(pattern in command.lower() for pattern in dangerous_patterns):
+                score = 0.1
+                category = "error"
+                feedback = "Potentially dangerous command detected"
+            
+            # Positive scoring for useful diagnostic commands
+            elif command.startswith(('kubectl', 'docker', 'ps', 'top', 'netstat', 'lsof', 'df', 'free')):
+                if exit_code == 0:
+                    score = 0.8
+                    category = "monitoring"
+                    feedback = f"Good diagnostic command executed successfully"
+                else:
+                    score = 0.4
+                    category = "exploration"
+                    feedback = f"Diagnostic command failed but was appropriate to try"
+            
+            # Medium score for other system commands
+            elif exit_code == 0 and len(stdout) > 10:
+                score = 0.6
+                feedback = f"Command executed successfully and produced output"
+            elif exit_code != 0:
+                score = 0.3
+                feedback = f"Command failed with exit code {exit_code}"
+            else:
+                feedback = f"Command executed but produced limited output"
+                
+            return JudgeEvaluation(
+                score=score,
+                feedback=feedback,
+                reasoning=f"Basic rule-based evaluation: exit_code={exit_code}, command_type='{category}'",
+                category=category
+            )
     
     async def count_interactions(self, task_id: UUID) -> int:
         """Count total interactions for a task."""
@@ -566,3 +615,24 @@ Respond in this exact JSON format:
         except Exception as e:
             logger.error("rl.judge.standalone.error", error=str(e))
             raise
+    
+    async def get_task_reward_statistics(self, task_id: UUID) -> Dict[str, Any]:
+        """Get reward function statistics for a task."""
+        try:
+            stats = self.heuristic_reward.get_task_statistics(task_id)
+            return {
+                "task_id": str(task_id),
+                "heuristic_stats": stats,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            logger.error("rl.stats.error", task_id=str(task_id), error=str(e))
+            return {"error": str(e)}
+    
+    async def cleanup_task_history(self, task_id: UUID):
+        """Clean up task history when task completes."""
+        try:
+            self.heuristic_reward.reset_task_history(task_id)
+            logger.info("rl.cleanup.success", task_id=str(task_id))
+        except Exception as e:
+            logger.error("rl.cleanup.error", task_id=str(task_id), error=str(e))
