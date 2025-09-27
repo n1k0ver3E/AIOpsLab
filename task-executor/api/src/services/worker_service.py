@@ -1,7 +1,7 @@
 """Worker service for managing worker processes."""
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, func
 
@@ -30,7 +30,7 @@ class WorkerService:
             worker.capabilities = worker_data.capabilities
             worker.worker_metadata = worker_data.metadata
             worker.status = WorkerStatus.IDLE
-            worker.last_heartbeat = datetime.utcnow()
+            worker.last_heartbeat = datetime.now(timezone.utc)
             worker.current_task_id = None
 
             logger.info(
@@ -97,7 +97,7 @@ class WorkerService:
         if not worker:
             raise ValueError(f"Worker {worker_id} not found")
 
-        worker.last_heartbeat = datetime.utcnow()
+        worker.last_heartbeat = datetime.now(timezone.utc)
         worker.status = heartbeat_data.status
         worker.current_task_id = heartbeat_data.current_task_id
 
@@ -210,7 +210,10 @@ class WorkerService:
             else 0
         )
 
-        uptime = datetime.utcnow() - worker.registered_at.replace(tzinfo=None)
+        # Normalize to aware UTC for uptime calculation
+        now_utc = datetime.now(timezone.utc)
+        reg = worker.registered_at if worker.registered_at.tzinfo else worker.registered_at.replace(tzinfo=timezone.utc)
+        uptime = now_utc - reg
 
         query = select(func.avg(Task.completed_at - Task.started_at)).where(
             and_(
@@ -243,10 +246,11 @@ class WorkerService:
 
         healthy = []
         unhealthy = []
-        cutoff = datetime.utcnow() - timedelta(seconds=timeout_seconds)
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
 
         for worker in workers:
-            if worker.last_heartbeat.replace(tzinfo=None) > cutoff:
+            hb = worker.last_heartbeat if worker.last_heartbeat.tzinfo else worker.last_heartbeat.replace(tzinfo=timezone.utc)
+            if hb > cutoff:
                 healthy.append(worker)
             else:
                 unhealthy.append(worker)
@@ -280,7 +284,7 @@ class WorkerService:
                 status=TaskStatus.PENDING,
                 worker_id=None,
                 started_at=None,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.now(timezone.utc)
             )
         )
 

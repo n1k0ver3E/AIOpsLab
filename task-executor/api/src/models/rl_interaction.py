@@ -6,7 +6,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .database import Base
 
@@ -95,15 +95,15 @@ class RLInteraction(Base):
 
     # Timestamps
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         comment="When the interaction was recorded"
     )
 
     executed_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
         comment="When the command was executed"
     )

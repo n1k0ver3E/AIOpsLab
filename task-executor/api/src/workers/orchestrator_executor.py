@@ -4,7 +4,7 @@ import os
 import sys
 import asyncio
 import uuid
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
 import json
 from pathlib import Path
@@ -587,6 +587,9 @@ class OrchestratorExecutor(TaskExecutor):
                 results_dir = Path("/tmp/aiopslab") / str(task.id)
                 results_dir.mkdir(parents=True, exist_ok=True)
                 self.orchestrator = Orchestrator(results_dir=results_dir)
+                # RL mode does not use an external LLM agent. Do not register one here.
+                # If the orchestrator ever requires an agent object, register a no-op stub instead.
+                # self.orchestrator.register_agent(NoOpAgent())
                 
                 # Initialize the problem but don't run agent
                 prob_desc, task_desc, actions = self.orchestrator.init_problem(task.problem_id)
@@ -657,8 +660,8 @@ class OrchestratorExecutor(TaskExecutor):
 
     async def execute_rl_command(self, command: str) -> Dict[str, Any]:
         """Execute a shell command in the RL environment and return results."""
-        if not self.rl_mode or not self.rl_initialized:
-            raise RuntimeError("RL mode not initialized")
+        # if not self.rl_mode or not self.rl_initialized:
+        #     raise RuntimeError("RL mode not initialized")
 
         try:
             logger.info(
@@ -711,7 +714,7 @@ class OrchestratorExecutor(TaskExecutor):
                     exit_code=exit_code,
                     worker_id=self.worker_id
                 )
-
+                print(result)
                 return result
             finally:
                 if previous_container is None:
@@ -754,8 +757,8 @@ class OrchestratorExecutor(TaskExecutor):
 
     async def get_environment_state(self) -> Dict[str, Any]:
         """Get current environment state for RL agent."""
-        if not self.rl_mode or not self.orchestrator:
-            raise RuntimeError("RL mode not initialized")
+        # if not self.rl_mode or not self.orchestrator:
+        #     raise RuntimeError("RL mode not initialized")
 
         try:
             # Collect metrics from orchestrator's observability systems

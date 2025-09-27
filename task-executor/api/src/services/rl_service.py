@@ -5,7 +5,7 @@ import json
 import time
 from typing import Dict, Any, Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.orm import selectinload
@@ -67,7 +67,7 @@ class RLService:
             exit_code=execution_result.get('exit_code'),
             stdout=execution_result.get('stdout'),
             stderr=execution_result.get('stderr'),
-            executed_at=datetime.utcnow()
+            executed_at=datetime.now(timezone.utc)
         )
         
         self.session.add(interaction)
@@ -248,14 +248,51 @@ class RLService:
             }
 
     async def _get_rl_executor(self):
-        """Get the RL orchestrator executor for command execution."""
-        # This would need to be implemented based on your worker management
-        # For now, return None to use fallback execution
-        # In a full implementation, you'd:
-        # 1. Find which worker is handling the task
-        # 2. Get the OrchestratorExecutor instance
-        # 3. Return it for RL command execution
-        return None
+        """Get an RL orchestrator executor from an idle worker."""
+        try:
+            # Find an idle worker that can handle RL operations
+            from ..models import Worker, WorkerStatus
+            
+            # Query for idle workers
+            idle_worker_query = (
+                select(Worker)
+                .where(Worker.status == WorkerStatus.IDLE)
+                .where(Worker.backend_type == "orchestrator")
+                .limit(1)
+            )
+            
+            result = await self.session.execute(idle_worker_query)
+            idle_worker = result.scalar_one_or_none()
+            print(idle_worker)
+            # Create orchestrator executor using the worker ID from database
+            from ..workers.orchestrator_executor import OrchestratorExecutor
+            
+            if idle_worker:
+                # Convert worker ID back to internal format for executor creation
+                worker_id = idle_worker.id.replace("-kind", "-internal")
+                executor = OrchestratorExecutor(
+                    worker_id=worker_id,
+                    session=self.session,
+                    backend_type="orchestrator"
+                )
+                logger.info("rl.executor.using_idle_worker", worker_id=idle_worker.id)
+            else:
+                # Fallback: create a standalone executor if no idle worker found
+                executor = OrchestratorExecutor(
+                    worker_id="rl-standalone-executor",
+                    session=self.session,
+                    backend_type="orchestrator"
+                )
+            
+            executor.rl_mode = True
+            executor.rl_initialized = True
+            
+            logger.info("rl.executor.created_standalone", reason="no_idle_worker_found")
+            return executor
+            
+        except Exception as e:
+            logger.error("rl.executor.creation.failed", error=str(e))
+            return None
     
     async def _collect_environment_response(
         self, 

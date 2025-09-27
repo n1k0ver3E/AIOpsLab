@@ -49,7 +49,7 @@ class Orchestrator:
         prob = self.probs.get_problem_instance(problem_id)
         deployment = self.probs.get_problem_deployment(problem_id)
         self.session.set_problem(prob, pid=problem_id)
-        self.session.set_agent(self.agent_name)
+        self.session.set_agent("rl mode")
 
         if deployment != "docker":
             print("Setting up OpenEBS...")

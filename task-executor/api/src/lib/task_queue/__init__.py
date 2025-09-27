@@ -1,7 +1,7 @@
 """Task queue library for managing task lifecycle and polling."""
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 import os
 from sqlalchemy import select, update, and_, or_
@@ -10,7 +10,6 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from ...models import Task, TaskStatus, Worker, WorkerStatus
 from ...config.logging import get_logger
-import pytz
 
 logger = get_logger(__name__)
 
@@ -34,7 +33,8 @@ class TaskQueue:
     async def create_task(
         self,
         problem_id: str,
-        parameters: Dict[str, Any]
+        parameters: Dict[str, Any],
+        task_type: str
     ) -> Task:
         """Create a new task in pending state."""
         # Set defaults for parameters
@@ -55,7 +55,8 @@ class TaskQueue:
         task = Task(
             problem_id=problem_id,
             status=TaskStatus.PENDING,
-            parameters=params
+            parameters=params,
+            task_type=task_type
         )
 
         self.session.add(task)
@@ -103,11 +104,10 @@ class TaskQueue:
 
         if task:
             # Update task with worker assignment
-            tz = pytz.timezone("Asia/Shanghai")
             task.status = TaskStatus.RUNNING
             task.worker_id = worker_id
-            task.started_at = datetime.now(tz)
-            task.updated_at = datetime.now(tz)
+            task.started_at = datetime.now(timezone.utc)
+            task.updated_at = datetime.now(timezone.utc)
 
             await self.session.commit()
             await self.session.refresh(task)
@@ -136,11 +136,10 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.COMPLETED):
             raise ValueError(f"Task {task_id} cannot transition to completed from {task.status}")
 
-        tz = pytz.timezone("Asia/Shanghai")
         task.status = TaskStatus.COMPLETED
         task.result = result
-        task.completed_at = datetime.now(tz)
-        task.updated_at = datetime.now(tz)
+        task.completed_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(timezone.utc)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -166,11 +165,10 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.FAILED):
             raise ValueError(f"Task {task_id} cannot transition to failed from {task.status}")
 
-        tz = pytz.timezone("Asia/Shanghai")
         task.status = TaskStatus.FAILED
         task.error_details = error_details
-        task.completed_at = datetime.now(tz)
-        task.updated_at = datetime.now(tz)
+        task.completed_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(timezone.utc)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -192,12 +190,11 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.TIMEOUT):
             raise ValueError(f"Task {task_id} cannot transition to timeout from {task.status}")
 
-        tz = pytz.timezone("Asia/Shanghai")
         timeout_minutes = task.parameters.get("timeout_minutes", 30)
         task.status = TaskStatus.TIMEOUT
         task.error_details = f"Task exceeded timeout limit of {timeout_minutes} minutes"
-        task.completed_at = datetime.now(tz)
-        task.updated_at = datetime.now(tz)
+        task.completed_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(timezone.utc)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -219,10 +216,9 @@ class TaskQueue:
         if not task.can_transition_to(TaskStatus.CANCELLED):
             raise ValueError(f"Task {task_id} cannot be cancelled from {task.status}")
 
-        tz = pytz.timezone("Asia/Shanghai")
         task.status = TaskStatus.CANCELLED
-        task.completed_at = datetime.now(tz)
-        task.updated_at = datetime.now(tz)
+        task.completed_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(timezone.utc)
 
         await self.session.commit()
         await self.session.refresh(task)
@@ -285,7 +281,7 @@ class TaskQueue:
 
     async def check_timeouts(self) -> List[Task]:
         """Check for tasks that have exceeded their timeout."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         timeout_tasks = []
 
         # Find running tasks that have exceeded timeout
@@ -302,7 +298,11 @@ class TaskQueue:
         for task in running_tasks:
             timeout_minutes = task.parameters.get("timeout_minutes", 30)
             if task.started_at:
-                elapsed = (now - task.started_at.replace(tzinfo=None)).total_seconds() / 60
+                # Normalize started_at to aware UTC for safe subtraction
+                started_at = (
+                    task.started_at if task.started_at.tzinfo else task.started_at.replace(tzinfo=timezone.utc)
+                )
+                elapsed = (now - started_at).total_seconds() / 60
                 if elapsed > timeout_minutes:
                     timeout_task = await self.timeout_task(task.id)
                     timeout_tasks.append(timeout_task)

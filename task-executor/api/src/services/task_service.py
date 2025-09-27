@@ -24,7 +24,8 @@ class TaskService:
         """Create a new task and add to queue."""
         task = await self.queue.create_task(
             problem_id=task_data.problem_id,
-            parameters=task_data.parameters
+            parameters=task_data.parameters,
+            task_type=task_data.task_type
         )
 
         await self._log_task_event(
