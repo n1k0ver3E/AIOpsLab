@@ -3,7 +3,10 @@
 import asyncio
 import json
 import time
-from typing import Dict, Any, Optional, List
+import re
+from pathlib import Path
+from difflib import SequenceMatcher
+from typing import Dict, Any, Optional, List, Tuple
 from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,8 +27,13 @@ logger = get_logger(__name__)
 class RLService:
     """Service for handling RL update operations."""
     
+    # Class variable to cache the cleaned training data
+    _training_data_cache = None
+    _training_data_loaded = False
+    
     def __init__(self, session: AsyncSession):
         self.session = session
+        self._load_training_data()
     
     async def process_rl_update(self, request: RLUpdateRequest) -> RLUpdateResponse:
         """Process an RL update request."""
@@ -403,10 +411,10 @@ class RLService:
                 except Exception as e:
                     logger.warning("rl.judge.agent.failed", error=str(e))
                     # Fall back to rule-based evaluation
-                    return self._rule_based_evaluation(command, env_response)
+                    return self._rule_based_evaluation(command, env_response, task)
             else:
                 # No judge agent available, use rule-based evaluation
-                return self._rule_based_evaluation(command, env_response)
+                return self._rule_based_evaluation(command, env_response, task)
             
         except Exception as e:
             logger.error("rl.judge.evaluation.error", error=str(e))
@@ -509,52 +517,186 @@ Respond in this exact JSON format:
         except Exception as e:
             logger.warning("rl.judge.parse.failed", error=str(e), response=response[:200])
             # Fallback to simple parsing or rule-based evaluation
-            return self._rule_based_evaluation(command, env_response)
+            return self._rule_based_evaluation(command, env_response, None)
 
-    def _rule_based_evaluation(self, command: str, env_response: EnvironmentResponse) -> JudgeEvaluation:
-        """Rule-based evaluation as fallback when LLM judge fails."""
+    def _rule_based_evaluation(self, command: str, env_response: EnvironmentResponse, task: Task = None) -> JudgeEvaluation:
+        """Heuristic similarity-based evaluation as fallback when LLM judge fails."""
         exit_code = env_response.execution_output.get('exit_code', -1)
         stdout = env_response.execution_output.get('stdout', '').lower()
         stderr = env_response.execution_output.get('stderr', '').lower()
         
-        # Basic scoring based on command characteristics
-        score = 0.5  # Default neutral score
-        category = "exploration"
+        # Get problem ID for similarity matching
+        problem_id = task.problem_id if task else None
         
-        # Safety check - dangerous commands get low scores
+        # Safety check - dangerous commands get low scores regardless of similarity
         dangerous_patterns = ['rm -rf', 'dd if=', 'mkfs', 'format', 'shutdown', 'reboot']
         if any(pattern in command.lower() for pattern in dangerous_patterns):
-            score = 0.1
-            category = "error"
-            feedback = "Potentially dangerous command detected"
+            return JudgeEvaluation(
+                score=0.1,
+                feedback="Potentially dangerous command detected - overriding similarity score",
+                reasoning="Safety override: dangerous command pattern detected",
+                category="error"
+            )
         
-        # Positive scoring for useful diagnostic commands
-        elif command.startswith(('kubectl', 'docker', 'ps', 'top', 'netstat', 'lsof', 'df', 'free')):
-            if exit_code == 0:
-                score = 0.8
-                category = "monitoring"
-                feedback = f"Good diagnostic command executed successfully"
+        # Use heuristic similarity-based reward calculation
+        try:
+            score, feedback = self._calculate_heuristic_reward(command, env_response, problem_id)
+            
+            # Determine category based on similarity score
+            if score >= 0.8:
+                category = "high_similarity"
+            elif score >= 0.6:
+                category = "good_similarity"
+            elif score >= 0.4:
+                category = "moderate_similarity"
+            elif score >= 0.2:
+                category = "low_similarity"
             else:
-                score = 0.4
-                category = "exploration"
-                feedback = f"Diagnostic command failed but was appropriate to try"
-        
-        # Medium score for other system commands
-        elif exit_code == 0 and len(stdout) > 10:
-            score = 0.6
-            feedback = f"Command executed successfully and produced output"
-        elif exit_code != 0:
-            score = 0.3
-            feedback = f"Command failed with exit code {exit_code}"
-        else:
-            feedback = f"Command executed but produced limited output"
+                category = "no_similarity"
+            
+            reasoning = f"Heuristic similarity-based evaluation for problem '{problem_id}'"
+            
+        except Exception as e:
+            logger.warning("rl.heuristic_reward.error", error=str(e))
+            # Fallback to simple rule-based evaluation
+            score = 0.5
+            category = "exploration"
+            
+            if command.startswith(('kubectl', 'docker', 'ps', 'top', 'netstat', 'lsof', 'df', 'free')):
+                if exit_code == 0:
+                    score = 0.8
+                    category = "monitoring"
+                    feedback = f"Good diagnostic command executed successfully"
+                else:
+                    score = 0.4
+                    feedback = f"Diagnostic command failed but was appropriate to try"
+            elif exit_code == 0 and len(stdout) > 10:
+                score = 0.6
+                feedback = f"Command executed successfully and produced output"
+            elif exit_code != 0:
+                score = 0.3
+                feedback = f"Command failed with exit code {exit_code}"
+            else:
+                feedback = f"Command executed but produced limited output"
+            
+            reasoning = f"Fallback rule-based evaluation: exit_code={exit_code}, command_type='{category}'"
             
         return JudgeEvaluation(
             score=score,
             feedback=feedback,
-            reasoning=f"Rule-based evaluation: exit_code={exit_code}, command_type='{category}'",
+            reasoning=reasoning,
             category=category
         )
+    
+    def _load_training_data(self) -> None:
+        """Load the cleaned training data for similarity-based rewards."""
+        if RLService._training_data_loaded:
+            return
+            
+        try:
+            # Look for the RL training dataset
+            data_path = Path(__file__).parent.parent.parent.parent / "ai_sre_data" / "openai_gpt-5" / "0911" / "rl_training_dataset.json"
+            
+            if data_path.exists():
+                with open(data_path, 'r', encoding='utf-8') as f:
+                    RLService._training_data_cache = json.load(f)
+                logger.info(f"rl.training_data.loaded", count=len(RLService._training_data_cache))
+            else:
+                logger.warning(f"rl.training_data.not_found", path=str(data_path))
+                RLService._training_data_cache = []
+                
+        except Exception as e:
+            logger.error(f"rl.training_data.load_error", error=str(e))
+            RLService._training_data_cache = []
+        
+        RLService._training_data_loaded = True
+    
+    def _calculate_string_similarity(self, str1: str, str2: str) -> float:
+        """Calculate similarity between two strings using SequenceMatcher."""
+        return SequenceMatcher(None, str1.lower().strip(), str2.lower().strip()).ratio()
+    
+    def _normalize_command(self, command: str) -> str:
+        """Normalize command for better similarity matching."""
+        # Remove exec_shell wrapper if present
+        command = re.sub(r'exec_shell\("([^"]+)"\)', r'\1', command)
+        
+        # Normalize whitespace
+        command = ' '.join(command.split())
+        
+        # Remove specific identifiers that might vary (pod names, timestamps, etc.)
+        command = re.sub(r'-[a-f0-9]{8,}', '-<id>', command)  # Pod hash suffixes
+        command = re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', '<timestamp>', command)  # Timestamps
+        
+        return command.lower().strip()
+    
+    def _find_best_similarity_match(self, command: str, problem_id: str) -> Tuple[float, str]:
+        """Find the best similarity match for a command in the training data."""
+        if not RLService._training_data_cache:
+            return 0.0, "No training data available"
+        
+        normalized_command = self._normalize_command(command)
+        best_score = 0.0
+        best_match_info = "No similar commands found"
+        
+        # First, try to find matches from the same problem type
+        same_problem_matches = [
+            item for item in RLService._training_data_cache 
+            if item.get('problem_id', '').startswith(problem_id.split('-')[0]) if problem_id
+        ]
+        
+        # If no same-problem matches, use all training data
+        candidates = same_problem_matches if same_problem_matches else RLService._training_data_cache
+        
+        for item in candidates:
+            training_command = self._normalize_command(item.get('command', ''))
+            similarity = self._calculate_string_similarity(normalized_command, training_command)
+            
+            if similarity > best_score:
+                best_score = similarity
+                problem_type = item.get('problem_id', 'unknown').split('-')[0]
+                best_match_info = f"Similar to '{item.get('command', '')[:50]}...' from {problem_type} (similarity: {similarity:.2f})"
+        
+        return best_score, best_match_info
+    
+    def _calculate_heuristic_reward(self, command: str, env_response: EnvironmentResponse, problem_id: str = None) -> Tuple[float, str]:
+        """Calculate heuristic reward based on similarity to successful traces."""
+        # Get similarity score
+        similarity_score, match_info = self._find_best_similarity_match(command, problem_id)
+        
+        # Base reward calculation
+        if similarity_score >= 0.8:
+            base_reward = 0.9  # Very high similarity
+            category = "high_similarity"
+        elif similarity_score >= 0.6:
+            base_reward = 0.7  # Good similarity
+            category = "good_similarity"
+        elif similarity_score >= 0.4:
+            base_reward = 0.5  # Moderate similarity
+            category = "moderate_similarity"
+        elif similarity_score >= 0.2:
+            base_reward = 0.3  # Low similarity
+            category = "low_similarity"
+        else:
+            base_reward = 0.1  # Very low similarity
+            category = "no_similarity"
+        
+        # Adjust based on execution success
+        exit_code = env_response.execution_output.get('exit_code', -1)
+        if exit_code == 0:
+            # Successful execution gets a bonus
+            final_reward = min(base_reward + 0.1, 1.0)
+            execution_info = "Command executed successfully"
+        elif exit_code != 0:
+            # Failed execution gets a penalty
+            final_reward = max(base_reward - 0.2, 0.0)
+            execution_info = f"Command failed with exit code {exit_code}"
+        else:
+            final_reward = base_reward
+            execution_info = "Command execution status unclear"
+        
+        feedback = f"Heuristic reward: {final_reward:.2f}. {match_info}. {execution_info}"
+        
+        return final_reward, feedback
     
     async def count_interactions(self, task_id: UUID) -> int:
         """Count total interactions for a task."""
